@@ -48,7 +48,7 @@ class Frame(object):
             Frame.__plt.draw()
             Frame.__plt.pause(dt)
 
-    def __init__(self, tank_dimensions, dome_radius, rings, nodes_per_ring, coefficients):
+    def __init__(self, tank_dimensions, dome_radius, rings, nodes_per_ring, coefficients, verbose=True):
         r, h = tank_dimensions
         self.Rt = r # radius of tank wall
         self.Ht = h # height of tank wall
@@ -74,7 +74,7 @@ class Frame(object):
 
         self.group = {}
 
-        self.verbose = True
+        self.verbose = verbose
 
         # Central set of girders
         gname = self.__create_name('GX', 0)
