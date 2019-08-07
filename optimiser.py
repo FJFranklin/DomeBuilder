@@ -5,6 +5,7 @@ import sys
 import numpy as np
 
 from BeesEtAl.BA_Garden   import BA_Garden
+from BeesEtAl.F3_Garden   import F3_Garden
 from BeesEtAl.Base_Coster import Base_Coster
 
 from DomeBuilder.MaterialLib import MaterialLib
@@ -17,10 +18,10 @@ Nn_min_max = ( 5, 20)
 Ns_min_max = (10, 30)
 Nm_min_max = (10, 40)
 
+bF3           = False
 bMESO         = True
 bShowStress   = False
 bVerbose      = False
-maxsol_runs   = 1000
 priorities    = [5,2,2,1]
 prior_init    = None
 fixedRings    = None
@@ -28,20 +29,26 @@ bSelectedOnly = False
 bLoadCheats   = False
 sourceFile    = None
 
+F3_flies_bees = [2,6,2] # two each of two genders * three orientations + six bees per gender = 24 evaluations per iteration
+F3_bee_radius = 0.02
+
 parser = argparse.ArgumentParser(description="DomeBuilder dome optimisation tool.")
 
-parser.add_argument('-v', '--verbose', help='Print additional commentary.', action='store_true')
-parser.add_argument('--show-stress',   help='Plot each frame, showing stresses.', action='store_true')
-parser.add_argument('--no-meso',       help='Use plain Bees Algorithm without MESO.', action='store_true')
-parser.add_argument('--refinement',    help='Run a study with 72 elite patches, 5 bees each.', action='store_true')
-parser.add_argument('--fix-rings',     help='Fix the number of node-rings.', dest='rings', default=0, type=int)
-parser.add_argument('--pareto-out',    help='Specify output file name for Pareto-optimal set [pareto.csv].', type=str, default='pareto.csv')
-parser.add_argument('--results-out',   help='Specify output file name for results [results.csv].', type=str, default='results.csv')
+parser.add_argument('-v', '--verbose', help='Print additional commentary.',                                                action='store_true')
+parser.add_argument('--show-stress',   help='Plot each frame, showing stresses.',                                          action='store_true')
+parser.add_argument('--no-meso',       help='Optimise without MESO.',                                                      action='store_true')
+parser.add_argument('--f3',            help='Use hybrid Firefly - Bees Algorithm.',                                        action='store_true')
+parser.add_argument('--refinement',    help='Run a study with 72 elite patches, 5 bees each.',                             action='store_true')
+parser.add_argument('--duration',      help='Duration, i.e., how many evaluations to end at [1000].',                      type=int, default=1000)
+parser.add_argument('--fix-rings',     help='Fix the number of node-rings.',                                               type=int, default=0, dest='rings')
+parser.add_argument('--pareto-out',    help='Specify output file name for Pareto-optimal set [pareto.csv].',               type=str, default='pareto.csv')
+parser.add_argument('--results-out',   help='Specify output file name for results [results.csv].',                         type=str, default='results.csv')
 parser.add_argument('--selected-in',   help='Specify input file name: do not run the optimiser, just evaluate locations.', type=str)
-parser.add_argument('--sources-in',    help='Specify input file name: pre-load scout locations.', type=str)
+parser.add_argument('--sources-in',    help='Specify input file name: pre-load scout locations.',                          type=str)
 
 args = parser.parse_args()
 
+maxsol_runs = args.duration
 resultsFile = args.results_out
 paretoFile  = args.pareto_out
 
@@ -50,6 +57,9 @@ if args.verbose:
 
 if args.show_stress:
     bShowStress = True
+
+if args.f3:
+    bF3 = True
 
 if args.selected_in is not None:
     bSelectedOnly = True
@@ -76,6 +86,7 @@ else:
         maxsol_runs = 3600
         priorities  = [5]*72 + [1]
         prior_init  = [1]*73
+        bF3 = False
         print('Running a refinement study.')
 
 class DomeCoster(Base_Coster):
@@ -96,7 +107,10 @@ class DomeCoster(Base_Coster):
 
         par[1,4:(4+Nsec)] = np.ones(Nsec) * 78
 
-        G = BA_Garden(par[0,:], par[1,:], priorities)
+        if bF3:
+            G = F3_Garden(par[0,:], par[1,:], F3_flies_bees)
+        else:
+            G = BA_Garden(par[0,:], par[1,:], priorities)
 
         G.costfn = DomeCoster(G, par)
 
@@ -276,10 +290,14 @@ if bSelectedOnly:
     plt.pause(60)
 else:
     method = 'gauss'
-    Nfail  = 6      # i.e., stops at 6th failure
-    rf     = 1 / 78 # distance between CHS sections in unit space
-    r0, sf = G.initial_radius_and_shrinking(Nfail, rf, method)
-    params = { 'radius': r0, 'shrink': sf, 'fail_at': Nfail, 'neighborhood': method, 'dynamic': True }
+
+    if bF3:
+        params = { 'bee-radius': F3_bee_radius, 'neighborhood': method }
+    else:
+        Nfail  = 6      # i.e., stops at 6th failure
+        rf     = 1 / 78 # distance between CHS sections in unit space
+        r0, sf = G.initial_radius_and_shrinking(Nfail, rf, method)
+        params = { 'radius': r0, 'shrink': sf, 'fail_at': Nfail, 'neighborhood': method, 'dynamic': True }
 
     G.set_search_params(**params)
 
