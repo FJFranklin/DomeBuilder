@@ -13,11 +13,6 @@ from DomeBuilder.Frame       import Frame
 
 # Defaults
 
-Nr_min_max = ( 3,  8)
-Nn_min_max = ( 5, 20)
-Ns_min_max = (10, 30)
-Nm_min_max = (10, 40)
-
 bF3           = False
 bMESO         = True
 bShowStress   = False
@@ -27,6 +22,7 @@ prior_init    = None
 fixedRings    = None
 bSelectedOnly = False
 bLoadCheats   = False
+bCostProduct  = False
 sourceFile    = None
 
 F3_flies_bees = [2,6,2] # two each of two genders * three orientations + six bees per gender = 24 evaluations per iteration
@@ -39,6 +35,8 @@ parser.add_argument('--show-stress',   help='Plot each frame, showing stresses.'
 parser.add_argument('--no-meso',       help='Optimise without MESO.',                                                      action='store_true')
 parser.add_argument('--f3',            help='Use hybrid Firefly - Bees Algorithm.',                                        action='store_true')
 parser.add_argument('--refinement',    help='Run a study with 72 elite patches, 5 bees each.',                             action='store_true')
+parser.add_argument('--bias-hybrid',   help='7-8 rings; reduced parameter range to seek hybrid designs.',                  action='store_true')
+parser.add_argument('--cost-product',  help='Make cost function the product of mass and displacement.',                    action='store_true')
 parser.add_argument('--duration',      help='Duration, i.e., how many evaluations to end at [1000].',                      type=int, default=1000)
 parser.add_argument('--fix-rings',     help='Fix the number of node-rings.',                                               type=int, default=0, dest='rings')
 parser.add_argument('--pareto-out',    help='Specify output file name for Pareto-optimal set [pareto.csv].',               type=str, default='pareto.csv')
@@ -51,6 +49,20 @@ args = parser.parse_args()
 maxsol_runs = args.duration
 resultsFile = args.results_out
 paretoFile  = args.pareto_out
+
+if args.bias_hybrid:
+    Nr_min_max = ( 7,  8)
+    Nn_min_max = ( 5, 20)
+    Ns_min_max = (20, 30)
+    Nm_min_max = (30, 40)
+else:
+    Nr_min_max = ( 3,  8)
+    Nn_min_max = ( 5, 20)
+    Ns_min_max = (10, 30)
+    Nm_min_max = (10, 40)
+
+if args.cost_product:
+    bCostProduct = True
 
 if args.verbose:
     bVerbose = True
@@ -233,8 +245,11 @@ class DomeCoster(Base_Coster):
             writer = csv.writer(csvfile, delimiter=',', quotechar='|', quoting=csv.QUOTE_MINIMAL)
             writer.writerow([mass, sigma, deflection, self.cost, Nc, *self.XA])
 
-        # let's make this multiobjective
-        self.cost = [self.cost, (deflection * 1E3)]
+        if bCostProduct:
+            self.cost = self.cost * (deflection * 1E3)
+        else:
+            # let's make this multiobjective
+            self.cost = [self.cost, (deflection * 1E3)]
 
     def __meso_check_group(self, s, group):
         secindex = group['sec_index']
@@ -287,7 +302,7 @@ if bSelectedOnly:
     G.pareto(paretoFile)
 
     print('==== Finished - quitting in 60 seconds ====')
-    plt.pause(60)
+    G.costfn.dome.syncPlotting(60)
 else:
     method = 'gauss'
 
